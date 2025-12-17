@@ -610,6 +610,8 @@ def menu_principal_keyboard():
         
         [InlineKeyboardButton("💸 Billetes", callback_data="bill"),
          InlineKeyboardButton("🏦 Bancas", callback_data="banc")],
+        
+        [InlineKeyboardButton("🏋🏽 SmartFit Black", callback_data="smart")],
     ])
 
 
@@ -783,6 +785,29 @@ SERVICIOS = {
         "🔹 <b>Pago en efectivo</b>\n"
         "💎 Precio revendedor: <b>S/210</b>\n"
         "👑 Precio vendedor sugerido: <b>S/250</b>"
+    ),
+
+        "smart": (
+        "📆 <b>PLANES DISPONIBLES</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+
+        "🔸 <b>1 MES</b>\n"
+        "💰 Precio de venta: <b>S/50</b>\n"
+        "🤝 Precio comisionista: <b>S/25</b>\n\n"
+        "━━━━━━━━━━━━\n\n"
+
+        "🔸 <b>2 MESES</b>\n"
+        "💰 Precio de venta: <b>S/70</b>\n"
+        "🤝 Precio comisionista: <b>S/35</b>\n\n"
+        "━━━━━━━━━━━━\n\n"
+
+        "🔸 <b>3 MESES</b>\n"
+        "💰 Precio de venta: <b>S/100</b>\n"
+        "🤝 Precio comisionista: <b>S/50</b>\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+
+        "⚡ <b>Deudas Smart Fit</b> se cancelan con <b>40% de descuento</b>\n"
+        "🚀 Acceso inmediato • Proceso rápido • Cupos limitados"
     ),
 }
 
@@ -982,10 +1007,6 @@ async def revendedores(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, parse_mode="HTML")
 
 # ==============================
-# /DELREVENDEDOR — Quitar verificación
-# ==============================
-
-# ==============================
 # /DELREVENDEDOR — Quitar verificación y rol
 # ==============================
 
@@ -1136,6 +1157,206 @@ async def soporte(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await update.message.reply_text(msg, parse_mode="HTML")
+# ==============================
+# /ADDOWNER — SOLO OWNERS
+# ==============================
+
+async def addowner(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    user = update.effective_user
+
+    # 🔒 SOLO OWNERS PUEDEN EJECUTAR
+    if not es_owner(user.id):
+        await update.message.reply_text(
+            "⛔ <b>No tienes permisos para usar este comando.</b>",
+            parse_mode="HTML"
+        )
+        return
+
+    # 📌 Validar argumento
+    if not context.args:
+        await update.message.reply_text(
+            "❗ <b>Uso correcto:</b>\n<code>/addowner ID_USUARIO</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    target_id = context.args[0].strip()
+
+    if not target_id.isdigit():
+        await update.message.reply_text(
+            "❌ El ID debe ser numérico.",
+            parse_mode="HTML"
+        )
+        return
+
+    users = load_json(USERS_FILE)
+    revs = load_json(REV_FILE)
+
+    # 🔎 Verificar que el usuario exista
+    if target_id not in users:
+        await update.message.reply_text(
+            f"❌ El usuario con ID <code>{target_id}</code> no está registrado.",
+            parse_mode="HTML"
+        )
+        return
+
+    # 📄 Datos del usuario
+    nombre = users[target_id].get("nombre", "Sin nombre")
+    username = users[target_id].get("username", "sin_username")
+
+    # ==============================
+    # 🔁 CAMBIAR A OWNER
+    # ==============================
+
+    # Cambiar rol en usuarios.json
+    users[target_id]["rol"] = "owner"
+    save_json(USERS_FILE, users)
+
+    # Si estaba como revendedor → asegurar verificación
+    revs[target_id] = {
+        "nombre": nombre,
+        "username": username,
+        "verificado": True
+    }
+    save_json(REV_FILE, revs)
+
+    # ==============================
+    # ✅ CONFIRMACIÓN
+    # ==============================
+
+    await update.message.reply_text(
+        "👑 <b>OWNER ASIGNADO CORRECTAMENTE</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"👤 <b>Nombre:</b> {nombre}\n"
+        f"💬 <b>Usuario:</b> @{username}\n"
+        f"🆔 <b>ID:</b> <code>{target_id}</code>\n\n"
+        "🟩 <b>Verificado automáticamente</b>\n"
+        "👑 Rol actualizado a <b>OWNER</b>",
+        parse_mode="HTML"
+    )
+# ==============================
+# /OWNERS — LISTAR OWNERS
+# ==============================
+
+async def owners(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    user = update.effective_user
+
+    # 🔒 SOLO OWNERS
+    if not es_owner(user.id):
+        await update.message.reply_text(
+            "⛔ <b>No tienes permisos para usar este comando.</b>",
+            parse_mode="HTML"
+        )
+        return
+
+    users = load_json(USERS_FILE)
+
+    lista = []
+    for uid, data in users.items():
+        if data.get("rol") == "owner":
+            nombre = data.get("nombre", "Sin nombre")
+            username = data.get("username", "sin_username")
+            lista.append(
+                f"👤 <b>{nombre}</b>\n"
+                f"💬 @{username}\n"
+                f"🆔 <code>{uid}</code>\n"
+                "━━━━━━━━━━━━"
+            )
+
+    if not lista:
+        await update.message.reply_text(
+            "📭 <b>No hay owners registrados.</b>",
+            parse_mode="HTML"
+        )
+        return
+
+    msg = (
+        "👑 <b>LISTA DE OWNERS</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        + "\n".join(lista)
+    )
+
+    await update.message.reply_text(msg, parse_mode="HTML")
+# ==============================
+# /DELOWNER — QUITAR OWNER
+# ==============================
+
+async def delowner(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    user = update.effective_user
+
+    # 🔒 SOLO OWNERS
+    if not es_owner(user.id):
+        await update.message.reply_text(
+            "⛔ <b>No tienes permisos para usar este comando.</b>",
+            parse_mode="HTML"
+        )
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "❗ <b>Uso correcto:</b>\n<code>/delowner ID_USUARIO</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    target_id = context.args[0].strip()
+
+    if not target_id.isdigit():
+        await update.message.reply_text(
+            "❌ El ID debe ser numérico.",
+            parse_mode="HTML"
+        )
+        return
+
+    # ❌ Evitar auto-eliminación
+    if int(target_id) == user.id:
+        await update.message.reply_text(
+            "⛔ <b>No puedes quitarte el rol de OWNER a ti mismo.</b>",
+            parse_mode="HTML"
+        )
+        return
+
+    users = load_json(USERS_FILE)
+    revs = load_json(REV_FILE)
+
+    if target_id not in users:
+        await update.message.reply_text(
+            f"❌ El usuario con ID <code>{target_id}</code> no existe.",
+            parse_mode="HTML"
+        )
+        return
+
+    if users[target_id].get("rol") != "owner":
+        await update.message.reply_text(
+            f"⚠️ El usuario <code>{target_id}</code> no es OWNER.",
+            parse_mode="HTML"
+        )
+        return
+
+    # 🔁 Cambiar rol
+    users[target_id]["rol"] = "usuario"
+    save_json(USERS_FILE, users)
+
+    # ❌ Eliminar de revendedores si existía
+    if target_id in revs:
+        del revs[target_id]
+        save_json(REV_FILE, revs)
+
+    nombre = users[target_id].get("nombre", "Desconocido")
+    username = users[target_id].get("username", "sin_username")
+
+    await update.message.reply_text(
+        "🗑️ <b>OWNER ELIMINADO</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"👤 <b>Nombre:</b> {nombre}\n"
+        f"💬 <b>Usuario:</b> @{username}\n"
+        f"🆔 <b>ID:</b> <code>{target_id}</code>\n\n"
+        "🔄 Rol cambiado a <b>Usuario</b>",
+        parse_mode="HTML"
+    )
 
 # ==============================
 # Info DNI
@@ -1233,6 +1454,9 @@ def main():
     app.add_handler(CommandHandler("listacomandos", listacomandos))
     app.add_handler(CommandHandler("revendedores", revendedores))
     app.add_handler(CommandHandler("delrevendedor", delrevendedor))
+    app.add_handler(CommandHandler("addowner", addowner))
+    app.add_handler(CommandHandler("owners", owners))
+    app.add_handler(CommandHandler("delowner", delowner))
     app.add_handler(CommandHandler("anuncio", anuncio))
     app.add_handler(CommandHandler("anunciochip", anunciochip))
     app.add_handler(CommandHandler("anunciog5", anunciog5))
@@ -1256,3 +1480,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
