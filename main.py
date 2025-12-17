@@ -247,28 +247,20 @@ async def me(update, context):
 
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    # Verificar registro del que ejecuta el comando
     if not await check_registro(update):
         return
 
     message = update.message
 
-    # 1️⃣ SI RESPONDE A UN MENSAJE → obtener ID del usuario respondido
+    # 1️⃣ Respuesta a mensaje
     if message.reply_to_message:
-        target_user = message.reply_to_message.from_user
-        target_id = str(target_user.id)
+        target_id = str(message.reply_to_message.from_user.id)
 
-    # 2️⃣ SI ENVÍA UN ID COMO ARGUMENTO
+    # 2️⃣ ID como argumento
     elif context.args:
         target_id = context.args[0].strip()
-
-        # Validar que sea numérico
         if not target_id.isdigit():
             return await message.reply_text("❌ Debes ingresar un ID válido.")
-        
-        # Para mostrar nombre/username si existen
-        target_user = None  
-
     else:
         return await message.reply_text(
             "❗ Uso correcto:\n"
@@ -278,9 +270,10 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     # ==============================
-    # Buscar datos del usuario en usuarios.json
+    # Cargar datos
     # ==============================
     usuarios = load_json(USERS_FILE)
+    revendedores = load_json(REV_FILE)
 
     if target_id not in usuarios:
         return await message.reply_text(
@@ -291,24 +284,29 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = usuarios[target_id]
 
     nombre = data.get("nombre", "Sin nombre")
-    username = data.get("username", None)
+    username = data.get("username", "sin_username")
+    rol_db = data.get("rol", "usuario")
 
     # ==============================
-    # Determinar rol y verificación
+    # 🧠 LÓGICA DE ROL (SOLO JSON)
     # ==============================
-    if es_owner(int(target_id)):
+
+    if rol_db == "owner":
         rol = "👑 <b>Owner</b>"
         verificado = "🟩 <b>Verificado</b> ✔️"
-    elif es_revendedor(target_id):
+
+    elif target_id in revendedores:
         rol = "🟦 <b>Revendedor</b>"
         verificado = "🟩 <b>Verificado</b> ✔️"
+
     else:
         rol = "👤 <b>Usuario</b>"
         verificado = "🟥 <b>No verificado</b> ❌"
 
     # ==============================
-    # Armar mensaje elegante
+    # Mensaje
     # ==============================
+
     msg = (
         "📌 <b>INFORMACIÓN DEL USUARIO</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -321,9 +319,6 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✨ Consulta realizada en <b>BUDA MARKET</b>"
     )
 
-    # ==============================
-    # Intentar enviar la imagen me.jpg
-    # ==============================
     base = os.path.dirname(os.path.abspath(__file__))
     img_path = os.path.join(base, "me.jpg")
 
@@ -336,7 +331,6 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
     except:
         await message.reply_text(msg, parse_mode="HTML")
-                
 
 # ==============================
 # /ANUNCIO — SOLO OWNERS
@@ -1165,7 +1159,7 @@ async def addowner(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = update.effective_user
 
-    # 🔒 SOLO OWNERS PUEDEN EJECUTAR
+    # 🔒 SOLO OWNERS
     if not es_owner(user.id):
         await update.message.reply_text(
             "⛔ <b>No tienes permisos para usar este comando.</b>",
@@ -1201,25 +1195,23 @@ async def addowner(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # 📄 Datos del usuario
+    # 📄 Datos actuales
     nombre = users[target_id].get("nombre", "Sin nombre")
     username = users[target_id].get("username", "sin_username")
 
     # ==============================
-    # 🔁 CAMBIAR A OWNER
+    # 🔁 CAMBIO DE ROL (CORRECTO)
     # ==============================
 
-    # Cambiar rol en usuarios.json
+    # 1️⃣ Cambiar rol en usuarios.json
     users[target_id]["rol"] = "owner"
+    users[target_id]["verificado"] = True
     save_json(USERS_FILE, users)
 
-    # Si estaba como revendedor → asegurar verificación
-    revs[target_id] = {
-        "nombre": nombre,
-        "username": username,
-        "verificado": True
-    }
-    save_json(REV_FILE, revs)
+    # 2️⃣ Si estaba en revendedores.json → ELIMINAR
+    if target_id in revs:
+        del revs[target_id]
+        save_json(REV_FILE, revs)
 
     # ==============================
     # ✅ CONFIRMACIÓN
@@ -1235,6 +1227,7 @@ async def addowner(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "👑 Rol actualizado a <b>OWNER</b>",
         parse_mode="HTML"
     )
+
 # ==============================
 # /OWNERS — LISTAR OWNERS
 # ==============================
@@ -1480,4 +1473,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
