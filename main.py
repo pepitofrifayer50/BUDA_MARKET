@@ -9,7 +9,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandle
 
 TOKEN = os.getenv("BOT_TOKEN")
 
-OWNERS = [6251510385, 8257283392,8306043445]  # AGREGA TUS IDS
+OWNERS = [6251510385, 8257283392,8306043445,8464678718]  # AGREGA TUS IDS
 
 USERS_FILE = "usuarios.json"
 REV_FILE = "revendedores.json"
@@ -247,20 +247,28 @@ async def me(update, context):
 
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
+    # Verificar registro del que ejecuta el comando
     if not await check_registro(update):
         return
 
     message = update.message
 
-    # 1️⃣ Respuesta a mensaje
+    # 1️⃣ SI RESPONDE A UN MENSAJE → obtener ID del usuario respondido
     if message.reply_to_message:
-        target_id = str(message.reply_to_message.from_user.id)
+        target_user = message.reply_to_message.from_user
+        target_id = str(target_user.id)
 
-    # 2️⃣ ID como argumento
+    # 2️⃣ SI ENVÍA UN ID COMO ARGUMENTO
     elif context.args:
         target_id = context.args[0].strip()
+
+        # Validar que sea numérico
         if not target_id.isdigit():
             return await message.reply_text("❌ Debes ingresar un ID válido.")
+        
+        # Para mostrar nombre/username si existen
+        target_user = None  
+
     else:
         return await message.reply_text(
             "❗ Uso correcto:\n"
@@ -270,10 +278,9 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     # ==============================
-    # Cargar datos
+    # Buscar datos del usuario en usuarios.json
     # ==============================
     usuarios = load_json(USERS_FILE)
-    revendedores = load_json(REV_FILE)
 
     if target_id not in usuarios:
         return await message.reply_text(
@@ -284,29 +291,24 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = usuarios[target_id]
 
     nombre = data.get("nombre", "Sin nombre")
-    username = data.get("username", "sin_username")
-    rol_db = data.get("rol", "usuario")
+    username = data.get("username", None)
 
     # ==============================
-    # 🧠 LÓGICA DE ROL (SOLO JSON)
+    # Determinar rol y verificación
     # ==============================
-
-    if rol_db == "owner":
+    if es_owner(int(target_id)):
         rol = "👑 <b>Owner</b>"
         verificado = "🟩 <b>Verificado</b> ✔️"
-
-    elif target_id in revendedores:
+    elif es_revendedor(target_id):
         rol = "🟦 <b>Revendedor</b>"
         verificado = "🟩 <b>Verificado</b> ✔️"
-
     else:
         rol = "👤 <b>Usuario</b>"
         verificado = "🟥 <b>No verificado</b> ❌"
 
     # ==============================
-    # Mensaje
+    # Armar mensaje elegante
     # ==============================
-
     msg = (
         "📌 <b>INFORMACIÓN DEL USUARIO</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -319,6 +321,9 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✨ Consulta realizada en <b>BUDA MARKET</b>"
     )
 
+    # ==============================
+    # Intentar enviar la imagen me.jpg
+    # ==============================
     base = os.path.dirname(os.path.abspath(__file__))
     img_path = os.path.join(base, "me.jpg")
 
@@ -331,7 +336,6 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
     except:
         await message.reply_text(msg, parse_mode="HTML")
-
 # ==============================
 # /ANUNCIO — SOLO OWNERS
 # ==============================
@@ -1151,205 +1155,6 @@ async def soporte(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await update.message.reply_text(msg, parse_mode="HTML")
-# ==============================
-# /ADDOWNER — SOLO OWNERS
-# ==============================
-
-async def addowner(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    user = update.effective_user
-
-    # 🔒 SOLO OWNERS
-    if not es_owner(user.id):
-        await update.message.reply_text(
-            "⛔ <b>No tienes permisos para usar este comando.</b>",
-            parse_mode="HTML"
-        )
-        return
-
-    # 📌 Validar argumento
-    if not context.args:
-        await update.message.reply_text(
-            "❗ <b>Uso correcto:</b>\n<code>/addowner ID_USUARIO</code>",
-            parse_mode="HTML"
-        )
-        return
-
-    target_id = context.args[0].strip()
-
-    if not target_id.isdigit():
-        await update.message.reply_text(
-            "❌ El ID debe ser numérico.",
-            parse_mode="HTML"
-        )
-        return
-
-    users = load_json(USERS_FILE)
-    revs = load_json(REV_FILE)
-
-    # 🔎 Verificar que el usuario exista
-    if target_id not in users:
-        await update.message.reply_text(
-            f"❌ El usuario con ID <code>{target_id}</code> no está registrado.",
-            parse_mode="HTML"
-        )
-        return
-
-    # 📄 Datos actuales
-    nombre = users[target_id].get("nombre", "Sin nombre")
-    username = users[target_id].get("username", "sin_username")
-
-    # ==============================
-    # 🔁 CAMBIO DE ROL (CORRECTO)
-    # ==============================
-
-    # 1️⃣ Cambiar rol en usuarios.json
-    users[target_id]["rol"] = "owner"
-    users[target_id]["verificado"] = True
-    save_json(USERS_FILE, users)
-
-    # 2️⃣ Si estaba en revendedores.json → ELIMINAR
-    if target_id in revs:
-        del revs[target_id]
-        save_json(REV_FILE, revs)
-
-    # ==============================
-    # ✅ CONFIRMACIÓN
-    # ==============================
-
-    await update.message.reply_text(
-        "👑 <b>OWNER ASIGNADO CORRECTAMENTE</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"👤 <b>Nombre:</b> {nombre}\n"
-        f"💬 <b>Usuario:</b> @{username}\n"
-        f"🆔 <b>ID:</b> <code>{target_id}</code>\n\n"
-        "🟩 <b>Verificado automáticamente</b>\n"
-        "👑 Rol actualizado a <b>OWNER</b>",
-        parse_mode="HTML"
-    )
-
-# ==============================
-# /OWNERS — LISTAR OWNERS
-# ==============================
-
-async def owners(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    user = update.effective_user
-
-    # 🔒 SOLO OWNERS
-    if not es_owner(user.id):
-        await update.message.reply_text(
-            "⛔ <b>No tienes permisos para usar este comando.</b>",
-            parse_mode="HTML"
-        )
-        return
-
-    users = load_json(USERS_FILE)
-
-    lista = []
-    for uid, data in users.items():
-        if data.get("rol") == "owner":
-            nombre = data.get("nombre", "Sin nombre")
-            username = data.get("username", "sin_username")
-            lista.append(
-                f"👤 <b>{nombre}</b>\n"
-                f"💬 @{username}\n"
-                f"🆔 <code>{uid}</code>\n"
-                "━━━━━━━━━━━━"
-            )
-
-    if not lista:
-        await update.message.reply_text(
-            "📭 <b>No hay owners registrados.</b>",
-            parse_mode="HTML"
-        )
-        return
-
-    msg = (
-        "👑 <b>LISTA DE OWNERS</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        + "\n".join(lista)
-    )
-
-    await update.message.reply_text(msg, parse_mode="HTML")
-# ==============================
-# /DELOWNER — QUITAR OWNER
-# ==============================
-
-async def delowner(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    user = update.effective_user
-
-    # 🔒 SOLO OWNERS
-    if not es_owner(user.id):
-        await update.message.reply_text(
-            "⛔ <b>No tienes permisos para usar este comando.</b>",
-            parse_mode="HTML"
-        )
-        return
-
-    if not context.args:
-        await update.message.reply_text(
-            "❗ <b>Uso correcto:</b>\n<code>/delowner ID_USUARIO</code>",
-            parse_mode="HTML"
-        )
-        return
-
-    target_id = context.args[0].strip()
-
-    if not target_id.isdigit():
-        await update.message.reply_text(
-            "❌ El ID debe ser numérico.",
-            parse_mode="HTML"
-        )
-        return
-
-    # ❌ Evitar auto-eliminación
-    if int(target_id) == user.id:
-        await update.message.reply_text(
-            "⛔ <b>No puedes quitarte el rol de OWNER a ti mismo.</b>",
-            parse_mode="HTML"
-        )
-        return
-
-    users = load_json(USERS_FILE)
-    revs = load_json(REV_FILE)
-
-    if target_id not in users:
-        await update.message.reply_text(
-            f"❌ El usuario con ID <code>{target_id}</code> no existe.",
-            parse_mode="HTML"
-        )
-        return
-
-    if users[target_id].get("rol") != "owner":
-        await update.message.reply_text(
-            f"⚠️ El usuario <code>{target_id}</code> no es OWNER.",
-            parse_mode="HTML"
-        )
-        return
-
-    # 🔁 Cambiar rol
-    users[target_id]["rol"] = "usuario"
-    save_json(USERS_FILE, users)
-
-    # ❌ Eliminar de revendedores si existía
-    if target_id in revs:
-        del revs[target_id]
-        save_json(REV_FILE, revs)
-
-    nombre = users[target_id].get("nombre", "Desconocido")
-    username = users[target_id].get("username", "sin_username")
-
-    await update.message.reply_text(
-        "🗑️ <b>OWNER ELIMINADO</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"👤 <b>Nombre:</b> {nombre}\n"
-        f"💬 <b>Usuario:</b> @{username}\n"
-        f"🆔 <b>ID:</b> <code>{target_id}</code>\n\n"
-        "🔄 Rol cambiado a <b>Usuario</b>",
-        parse_mode="HTML"
-    )
 
 # ==============================
 # Info DNI
@@ -1447,9 +1252,6 @@ def main():
     app.add_handler(CommandHandler("listacomandos", listacomandos))
     app.add_handler(CommandHandler("revendedores", revendedores))
     app.add_handler(CommandHandler("delrevendedor", delrevendedor))
-    app.add_handler(CommandHandler("addowner", addowner))
-    app.add_handler(CommandHandler("owners", owners))
-    app.add_handler(CommandHandler("delowner", delowner))
     app.add_handler(CommandHandler("anuncio", anuncio))
     app.add_handler(CommandHandler("anunciochip", anunciochip))
     app.add_handler(CommandHandler("anunciog5", anunciog5))
@@ -1473,5 +1275,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
